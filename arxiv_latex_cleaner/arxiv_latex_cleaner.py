@@ -883,13 +883,15 @@ def _normalize_main_tex_path(main_tex, input_folder):
   else:
     main_tex_abs = os.path.abspath(os.path.join(input_folder, main_tex))
 
-  main_tex_rel = os.path.normpath(
-      os.path.relpath(main_tex_abs, normalized_input_folder)
-  )
-  if main_tex_rel.startswith('..' + os.sep) or main_tex_rel == '..':
+  if os.path.commonpath([normalized_input_folder, main_tex_abs]
+                       ) != normalized_input_folder:
     raise ValueError(
         'main_tex must be under input_folder: {}.'.format(main_tex)
     )
+
+  main_tex_rel = os.path.normpath(
+      os.path.relpath(main_tex_abs, normalized_input_folder)
+  )
   return main_tex_rel
 
 
