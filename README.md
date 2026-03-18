@@ -67,6 +67,8 @@ There is a 50MB limit on arXiv submissions, so to make it fit:
     included in any other `.tex` file).
 *   Removes all unused images that take up space (those that are not actually
     included in any used `.tex` file).
+*   Optionally restricts copied files to those reachable from a selected main
+    TeX file via `--main-tex`.
 *   Optionally resizes all images to `im_size` pixels, to reduce the size of the
     submission. You can allowlist some images to skip the global size using
     `images_allowlist`.
@@ -124,9 +126,10 @@ patterns.
 usage: arxiv_latex_cleaner@v1.0.10 [-h] [--resize_images] [--im_size IM_SIZE]
                                    [--compress_pdf]
                                    [--pdf_im_resolution PDF_IM_RESOLUTION]
-                                   [--images_allowlist IMAGES_ALLOWLIST]
-                                   [--keep_bib]
-                                   [--commands_to_delete COMMANDS_TO_DELETE [COMMANDS_TO_DELETE ...]]
+                                    [--images_allowlist IMAGES_ALLOWLIST]
+                                    [--keep_bib]
+                                    [--main-tex MAIN_TEX]
+                                    [--commands_to_delete COMMANDS_TO_DELETE [COMMANDS_TO_DELETE ...]]
                                    [--commands_only_to_delete COMMANDS_ONLY_TO_DELETE [COMMANDS_ONLY_TO_DELETE ...]]
                                    [--environments_to_delete ENVIRONMENTS_TO_DELETE [ENVIRONMENTS_TO_DELETE ...]]
                                    [--if_exceptions IF_EXCEPTIONS [IF_EXCEPTIONS ...]]
@@ -161,6 +164,9 @@ optional arguments:
                         --pdf_im_resolution, respectively. Format is a
                         dictionary as: '{"path/to/im.jpg": 1000}'
   --keep_bib            Avoid deleting the *.bib files.
+  --main-tex MAIN_TEX   Main TeX file used to build a strict whitelist of
+                        files to copy. Accepts an absolute path, or a path
+                        relative to input_folder.
   --commands_to_delete COMMANDS_TO_DELETE [COMMANDS_TO_DELETE ...]
                         LaTeX commands that will be deleted. Useful for e.g.
                         user-defined \todo commands. For example, to delete

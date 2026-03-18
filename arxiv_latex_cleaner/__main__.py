@@ -90,6 +90,16 @@ PARSER.add_argument(
 )
 
 PARSER.add_argument(
+    "--main-tex",
+    dest="main_tex",
+    type=str,
+    help=(
+        "Main TeX file used to build a strict whitelist of files to copy. "
+        "Accepts an absolute path, or a path relative to input_folder."
+    ),
+)
+
+PARSER.add_argument(
     "--commands_to_delete",
     nargs="+",
     default=[],

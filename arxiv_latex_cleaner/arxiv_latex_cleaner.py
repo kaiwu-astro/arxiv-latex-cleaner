@@ -702,10 +702,33 @@ def _resize_pdf_figure(
 
 
 def _copy_only_referenced_non_tex_not_in_root(parameters, contents, splits):
-  for fn in _keep_only_referenced(
-      splits['non_tex_not_in_root'], contents, strict=True
+  for fn in _keep_only_referenced_non_tex_files(
+      splits['non_tex_not_in_root'], contents
   ):
     _copy_file(fn, parameters)
+
+def _keep_only_referenced_non_tex_files(filenames, contents):
+  """Returns non-tex files referenced from contents.
+
+  Some LaTeX support files are usually referenced without extension, e.g.
+  `\\usepackage{mystyle}` for `mystyle.sty`.
+  """
+  referenced = set(_keep_only_referenced(filenames, contents, strict=True))
+  latex_support_extensions = {
+      '.sty',
+      '.cls',
+      '.bst',
+      '.bbx',
+      '.cbx',
+      '.clo',
+      '.def',
+  }
+  for filename in filenames:
+    if pathlib.Path(filename).suffix.lower() in latex_support_extensions:
+      if _search_reference(filename, contents, strict=False) is not None:
+        referenced.add(filename)
+  return list(referenced)
+
 
 def _resize_and_copy_figures_if_referenced(parameters, contents, splits):
     """Modified to handle PNG to JPG conversion and reference updates."""
@@ -821,6 +844,27 @@ def _keep_only_referenced_tex(contents, splits):
     old_referenced = referenced.copy()
 
 
+def _keep_only_referenced_from_main_tex(contents, splits, main_tex_files):
+  """Returns tex files reachable from the provided main tex files."""
+  referenced = set(main_tex_files)
+  all_tex_files = set(splits['tex_in_root'] + splits['tex_not_in_root'])
+
+  while True:
+    old_referenced = referenced.copy()
+    for fn in old_referenced:
+      for tex_file in all_tex_files:
+        if tex_file in referenced:
+          continue
+        if regex.search(
+            r'(' + os.path.splitext(tex_file)[0] + r'[.}])',
+            '\n'.join(contents[fn]),
+        ):
+          referenced.add(tex_file)
+    if referenced == old_referenced:
+      splits['tex_to_copy'] = list(referenced)
+      return
+
+
 def _add_root_tex_files(splits):
   # TODO: Check auto-ignore marker in root to detect the main file. Then check
   #  there is only one non-referenced TeX in root.
@@ -829,6 +873,34 @@ def _add_root_tex_files(splits):
   for fn in splits['tex_in_root']:
     if fn not in splits['tex_to_copy']:
       splits['tex_to_copy'].append(fn)
+
+
+def _normalize_main_tex_path(main_tex, input_folder):
+  """Returns main tex path as normalized relative path under input folder."""
+  normalized_input_folder = os.path.abspath(input_folder)
+  if os.path.isabs(main_tex):
+    main_tex_abs = os.path.abspath(main_tex)
+  else:
+    main_tex_abs = os.path.abspath(os.path.join(input_folder, main_tex))
+
+  main_tex_rel = os.path.normpath(
+      os.path.relpath(main_tex_abs, normalized_input_folder)
+  )
+  if main_tex_rel.startswith('..' + os.sep) or main_tex_rel == '..':
+    raise ValueError(
+        'main_tex must be under input_folder: {}.'.format(main_tex)
+    )
+  return main_tex_rel
+
+
+def _copy_only_referenced_non_tex_in_root(parameters, full_content, splits):
+  """Copies root-level non-tex files only if referenced from copied tex."""
+  non_tex_to_copy = _keep_only_referenced_non_tex_files(
+      splits['non_tex_in_root'], full_content
+  )
+  for filename in non_tex_to_copy:
+    logging.info('Copying root-level referenced file %s.', filename)
+    _copy_file(filename, parameters)
 
 
 def _split_all_files(parameters):
@@ -982,7 +1054,15 @@ def run_arxiv_cleaner(parameters):
       tex_contents[tex_file] = content.split('\n')
 
     _keep_only_referenced_tex(tex_contents, splits)
-    _add_root_tex_files(splits)
+    if parameters.get('main_tex', None):
+      main_tex = _normalize_main_tex_path(
+          parameters['main_tex'], parameters['input_folder']
+      )
+      if main_tex not in tex_contents:
+        raise ValueError('main_tex file not found: {}'.format(main_tex))
+      _keep_only_referenced_from_main_tex(tex_contents, splits, [main_tex])
+    else:
+      _add_root_tex_files(splits)
 
     for tex_file in splits['tex_to_copy']:
       logging.info('Replacing patterns in file %s.', tex_file)
@@ -1002,9 +1082,12 @@ def run_arxiv_cleaner(parameters):
         ''.join(tex_contents[fn]) for fn in splits['tex_to_copy']
     )
     _copy_only_referenced_non_tex_not_in_root(parameters, full_content, splits)
-    for non_tex_file in splits['non_tex_in_root']:
-      logging.info('Copying non-tex file %s.', non_tex_file)
-      _copy_file(non_tex_file, parameters)
+    if parameters.get('main_tex', None):
+      _copy_only_referenced_non_tex_in_root(parameters, full_content, splits)
+    else:
+      for non_tex_file in splits['non_tex_in_root']:
+        logging.info('Copying non-tex file %s.', non_tex_file)
+        _copy_file(non_tex_file, parameters)
 
     filename_changes = _resize_and_copy_figures_if_referenced(parameters, full_content, splits)
     logging.info('Outputs written to %s', parameters['output_folder'])
