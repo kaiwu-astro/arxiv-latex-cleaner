@@ -833,7 +833,8 @@ def _keep_only_referenced_tex(contents, splits):
     for fn in old_referenced:
       for fn2 in old_referenced:
         if regex.search(
-            r'(' + os.path.splitext(fn)[0] + r'[.}])', '\n'.join(contents[fn2])
+            r'(' + regex.escape(os.path.splitext(fn)[0]) + r'[.}])',
+            '\n'.join(contents[fn2]),
         ):
           referenced.add(fn)
 
@@ -856,7 +857,7 @@ def _keep_only_referenced_from_main_tex(contents, splits, main_tex_files):
         if tex_file in referenced:
           continue
         if regex.search(
-            r'(' + os.path.splitext(tex_file)[0] + r'[.}])',
+            r'(' + regex.escape(os.path.splitext(tex_file)[0]) + r'[.}])',
             '\n'.join(contents[fn]),
         ):
           referenced.add(tex_file)
