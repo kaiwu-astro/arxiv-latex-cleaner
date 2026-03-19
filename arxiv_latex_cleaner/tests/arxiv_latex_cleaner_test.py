@@ -227,6 +227,9 @@ def make_search_reference_tests():
   )
 
 
+TEMP_EXAMPLE_DIR = os.path.join(tempfile.gettempdir(), 'example')
+TEMP_OTHER_DIR = os.path.join(tempfile.gettempdir(), 'other')
+
 class UnitTests(parameterized.TestCase):
 
   @parameterized.named_parameters(
@@ -882,12 +885,12 @@ class UnitTests(parameterized.TestCase):
       },
       {
           'testcase_name': 'absolute_path',
-          'main_tex': '/tmp/example/paper/main.tex',
+          'main_tex': os.path.join(TEMP_EXAMPLE_DIR, 'paper', 'main.tex'),
           'true_output': 'paper/main.tex',
       },
   )
   def test_normalize_main_tex_path(self, main_tex, true_output):
-    input_folder = '/tmp/example'
+    input_folder = TEMP_EXAMPLE_DIR
     self.assertEqual(
         arxiv_latex_cleaner._normalize_main_tex_path(main_tex, input_folder),
         true_output,
@@ -896,7 +899,8 @@ class UnitTests(parameterized.TestCase):
   def test_normalize_main_tex_path_outside_input_folder(self):
     with self.assertRaises(ValueError):
       arxiv_latex_cleaner._normalize_main_tex_path(
-          '/tmp/other/main.tex', '/tmp/example'
+          os.path.join(TEMP_OTHER_DIR, 'main.tex'),
+          TEMP_EXAMPLE_DIR,
       )
 
 
