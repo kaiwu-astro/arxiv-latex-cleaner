@@ -1049,6 +1049,7 @@ class IntegrationTests(parameterized.TestCase):
             '\\begin{document}\n'
             '\\input{sections/section}\n'
             '\\includegraphics{images/used.png}\n'
+            '\\bibliography{refs}\n'
             '\\end{document}\n'
         )
       with open(path.join(input_dir, 'unused.tex'), 'w') as f:
@@ -1061,6 +1062,8 @@ class IntegrationTests(parameterized.TestCase):
         f.write(b'ppt')
       with open(path.join(input_dir, 'sections', 'section.tex'), 'w') as f:
         f.write('section\n')
+      with open(path.join(input_dir, 'refs.bib'), 'w') as f:
+        f.write('% bibliography\n')
 
       Image.new('RGB', (8, 8), color='red').save(
           path.join(input_dir, 'images', 'used.png')
@@ -1087,14 +1090,20 @@ class IntegrationTests(parameterized.TestCase):
           'if_exceptions': ['iffalt'],
           'environments_to_delete': [],
           'use_external_tikz': None,
-          'keep_bib': False,
+          'keep_bib': True,
       })
 
       output_dir = input_dir + '_arXiv'
       output_files = set(arxiv_latex_cleaner._list_all_files(output_dir))
       self.assertSetEqual(
           output_files,
-          {'main.tex', 'custom.sty', 'sections/section.tex', 'images/used.png'},
+          {
+              'main.tex',
+              'custom.sty',
+              'sections/section.tex',
+              'images/used.png',
+              'refs.bib',
+          },
       )
       shutil.rmtree(output_dir)
 
