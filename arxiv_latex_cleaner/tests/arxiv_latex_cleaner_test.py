@@ -14,7 +14,9 @@
 # limitations under the License.
 
 from os import path
+import os
 import shutil
+import tempfile
 import unittest
 from absl.testing import parameterized
 from arxiv_latex_cleaner import arxiv_latex_cleaner
@@ -224,6 +226,9 @@ def make_search_reference_tests():
       },
   )
 
+
+TEMP_EXAMPLE_DIR = os.path.join(tempfile.gettempdir(), 'example')
+TEMP_OTHER_DIR = os.path.join(tempfile.gettempdir(), 'other')
 
 class UnitTests(parameterized.TestCase):
 
@@ -872,6 +877,32 @@ class UnitTests(parameterized.TestCase):
       msg = msg_fmt.format(filename, content)
       self.assertEqual(matched, true_output, msg)
 
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'relative_path',
+          'main_tex': 'paper/main.tex',
+          'true_output': 'paper/main.tex',
+      },
+      {
+          'testcase_name': 'absolute_path',
+          'main_tex': os.path.join(TEMP_EXAMPLE_DIR, 'paper', 'main.tex'),
+          'true_output': 'paper/main.tex',
+      },
+  )
+  def test_normalize_main_tex_path(self, main_tex, true_output):
+    input_folder = TEMP_EXAMPLE_DIR
+    self.assertEqual(
+        arxiv_latex_cleaner._normalize_main_tex_path(main_tex, input_folder),
+        true_output,
+    )
+
+  def test_normalize_main_tex_path_outside_input_folder(self):
+    with self.assertRaises(ValueError):
+      arxiv_latex_cleaner._normalize_main_tex_path(
+          os.path.join(TEMP_OTHER_DIR, 'main.tex'),
+          TEMP_EXAMPLE_DIR,
+      )
+
 
 class IntegrationTests(parameterized.TestCase):
 
@@ -995,8 +1026,90 @@ class IntegrationTests(parameterized.TestCase):
             path.join(self.out_path, f1), path.join(out_path_true, f1)
         )
 
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'relative_main_tex',
+          'use_absolute_main_tex': False,
+      },
+      {
+          'testcase_name': 'absolute_main_tex',
+          'use_absolute_main_tex': True,
+      },
+  )
+  def test_main_tex_whitelist(self, use_absolute_main_tex):
+    with tempfile.TemporaryDirectory() as tempdir:
+      input_dir = path.join(tempdir, 'submission')
+      os.makedirs(path.join(input_dir, 'sections'))
+      os.makedirs(path.join(input_dir, 'images'))
+
+      with open(path.join(input_dir, 'main.tex'), 'w') as f:
+        f.write(
+            '\\documentclass{article}\n'
+            '\\usepackage{custom}\n'
+            '\\begin{document}\n'
+            '\\input{sections/section}\n'
+            '\\includegraphics{images/used.png}\n'
+            '\\bibliography{refs}\n'
+            '\\end{document}\n'
+        )
+      with open(path.join(input_dir, 'unused.tex'), 'w') as f:
+        f.write('unused\n')
+      with open(path.join(input_dir, 'custom.sty'), 'w') as f:
+        f.write('% style\n')
+      with open(path.join(input_dir, 'notes.md'), 'w') as f:
+        f.write('should not be copied\n')
+      with open(path.join(input_dir, 'slides.pptx'), 'wb') as f:
+        f.write(b'ppt')
+      with open(path.join(input_dir, 'sections', 'section.tex'), 'w') as f:
+        f.write('section\n')
+      with open(path.join(input_dir, 'refs.bib'), 'w') as f:
+        f.write('% bibliography\n')
+
+      Image.new('RGB', (8, 8), color='red').save(
+          path.join(input_dir, 'images', 'used.png')
+      )
+      Image.new('RGB', (8, 8), color='blue').save(
+          path.join(input_dir, 'images', 'unused.png')
+      )
+
+      main_tex = (
+          path.join(input_dir, 'main.tex')
+          if use_absolute_main_tex
+          else 'main.tex'
+      )
+      arxiv_latex_cleaner.run_arxiv_cleaner({
+          'input_folder': input_dir,
+          'main_tex': main_tex,
+          'images_allowlist': {},
+          'resize_images': False,
+          'im_size': 100,
+          'compress_pdf': False,
+          'pdf_im_resolution': 500,
+          'commands_to_delete': [],
+          'commands_only_to_delete': [],
+          'if_exceptions': ['iffalt'],
+          'environments_to_delete': [],
+          'use_external_tikz': None,
+          'keep_bib': True,
+      })
+
+      output_dir = input_dir + '_arXiv'
+      output_files = set(arxiv_latex_cleaner._list_all_files(output_dir))
+      self.assertSetEqual(
+          output_files,
+          {
+              'main.tex',
+              'custom.sty',
+              'sections/section.tex',
+              'images/used.png',
+              'refs.bib',
+          },
+      )
+      shutil.rmtree(output_dir)
+
   def tearDown(self):
-    shutil.rmtree(self.out_path)
+    if path.isdir(self.out_path):
+      shutil.rmtree(self.out_path)
     super(IntegrationTests, self).tearDown()
 
 if __name__ == '__main__':
